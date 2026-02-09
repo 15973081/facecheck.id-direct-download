@@ -3,99 +3,145 @@
 // @namespace    https://github.com/15973081
 // @version      0.2
 // @description  让 FaceCheck.id 的 base64 预览图可直接点击下载，不跳转、不重定向
-// @author       You
+// @author       mayunnan
 // @match        https://facecheck.id/*
 // @match        https://*.facecheck.id/*
 // @grant        none
 // @run-at       document-end
-// @license      MIT
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // ------------------------------
-    // 配置区（可自行调整）
-    // ------------------------------
-    const DOWNLOAD_FILENAME_PREFIX = 'facecheck-';
-    const FILE_EXT = 'webp';  // FaceCheck 目前主要是 webp，可改成 png 等
+    const PREFIX = 'facecheck-';
+    const EXT = 'webp';
 
-    // ------------------------------
-    // 主逻辑
-    // ------------------------------
-    function makeImageDownloadable(img) {
-        // 避免重复处理
-        if (img.dataset.fcDownloadable === 'true') return;
-        img.dataset.fcDownloadable = 'true';
+    // 创建按钮样式（两个按钮：下载 + Yandex搜索）
+    const style = document.createElement('style');
+    style.textContent = `
+        .fc-btn-container {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            display: flex;
+            gap: 6px;
+            z-index: 9999;
+            display: none;
+        }
+        .fc-download-btn, .fc-yandex-btn {
+            background: rgba(0, 120, 215, 0.9);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .fc-download-btn:hover, .fc-yandex-btn:hover {
+            background: rgba(0, 120, 215, 1);
+        }
+        .fc-download-container {
+            position: relative;
+            display: inline-block;
+        }
+        .fc-download-container:hover .fc-btn-container {
+            display: flex;
+        }
+    `;
+    document.head.appendChild(style);
 
-        // 只处理真正的 base64 图片
-        if (!img.src.startsWith('data:image/')) return;
+    function extractDataUrlFromBg(el) {
+        const bg = window.getComputedStyle(el).backgroundImage;
+        if (!bg || bg === 'none') return null;
 
-        // 创建下载用的 <a> 标签
-        const link = document.createElement('a');
-        link.href = img.src;
-        link.download = `${DOWNLOAD_FILENAME_PREFIX}${Date.now()}.${FILE_EXT}`;
+        // 匹配 url("data:...") 或 url(data:...)
+        const match = bg.match(/url\(["']?(data:image\/[^"')]+)["']?\)/i);
+        return match ? match[1] : null;
+    }
 
-        // 视觉提示
-        img.title = '点击直接下载此图片';
-        img.style.cursor = 'pointer';
-        img.style.opacity = '0.92';  // 轻微变亮提示可交互（可选）
+    function addButtons(el, dataUrl) {
+        // 避免重复添加
+        if (el.dataset.fcHasBtn === '1') return;
+        el.dataset.fcHasBtn = '1';
 
-        // 包装：把 img 包进 a 标签
-        if (img.parentNode) {
-            img.parentNode.insertBefore(link, img);
-            link.appendChild(img);
+        // 包一层相对定位容器
+        let container = el;
+        if (el.parentNode && !el.parentNode.classList.contains('fc-download-container')) {
+            container = document.createElement('div');
+            container.className = 'fc-download-container';
+            el.parentNode.insertBefore(container, el);
+            container.appendChild(el);
         }
 
-        // 点击时强制下载（兼容部分浏览器直接打开 data: URL 的行为）
-        link.addEventListener('click', function(e) {
+        // 按钮容器
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'fc-btn-container';
+
+        // 下载按钮
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'fc-download-btn';
+        downloadBtn.textContent = '下载';
+        downloadBtn.title = '点击下载此 base64 图片';
+
+        downloadBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
 
-            const tempA = document.createElement('a');
-            tempA.href = img.src;
-            tempA.download = `${DOWNLOAD_FILENAME_PREFIX}${Math.random().toString(36).slice(2, 10)}.${FILE_EXT}`;
-            document.body.appendChild(tempA);
-            tempA.click();
-            document.body.removeChild(tempA);
-        });
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = `${PREFIX}${Date.now()}.${EXT}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        };
+
+        // Yandex 搜索按钮
+        const yandexBtn = document.createElement('button');
+        yandexBtn.className = 'fc-yandex-btn';
+        yandexBtn.textContent = 'Yandex搜索';
+        yandexBtn.title = '点击用此图片在 Yandex 进行反向搜索';
+
+        yandexBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 构造 Yandex 反向图片搜索 URL，使用 encodeURIComponent 处理 dataUrl
+            const yandexUrl = `https://yandex.com/images/search?rpt=imageview&url=${encodeURIComponent(dataUrl)}`;
+            window.open(yandexUrl, '_blank');
+        };
+
+        btnContainer.appendChild(downloadBtn);
+        btnContainer.appendChild(yandexBtn);
+        container.appendChild(btnContainer);
     }
 
-    // 处理当前已存在的图片
-    function processExistingImages() {
-        const images = document.querySelectorAll('img[src^="data:image/"]');
-        images.forEach(makeImageDownloadable);
-    }
+    function scanForBgImages() {
+        // 扫描结果容器（根据 ID 如 #fimg0 或类名调整）
+        const candidates = document.querySelectorAll(
+            'div, li, span, a, [class*="result"], [class*="card"], [class*="item"], [id^="fimg"]'
+        );
 
-    // 监听动态插入的 DOM 变化（FaceCheck 是 AJAX 加载结果）
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length) {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) {  // 元素节点
-                        if (node.tagName === 'IMG' && node.src.startsWith('data:image/')) {
-                            makeImageDownloadable(node);
-                        }
-                        // 也检查子孙节点
-                        const imgs = node.querySelectorAll('img[src^="data:image/"]');
-                        imgs.forEach(makeImageDownloadable);
-                    }
-                });
+        candidates.forEach(el => {
+            const dataUrl = extractDataUrlFromBg(el);
+            if (dataUrl && dataUrl.startsWith('data:image/')) {
+                addButtons(el, dataUrl);
             }
         });
+    }
+
+    // 初次扫描
+    scanForBgImages();
+
+    // 监听动态变化
+    const observer = new MutationObserver(() => {
+        scanForBgImages();
     });
 
-    // 启动监听
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
-    // 初次执行
-    processExistingImages();
+    // 定时扫描
+    setInterval(scanForBgImages, 8000);
 
-    // 每隔几秒再扫一次（防极端延迟加载，1分钟扫一次即可）
-    setInterval(processExistingImages, 60 * 1000);
-
-    console.log('[FaceCheck Download] 脚本已加载，base64 图片现在可点击下载');
+    console.log('[FC Download & Yandex] 脚本加载完成，悬停结果图出现“下载”和“Yandex搜索”按钮');
 })();
