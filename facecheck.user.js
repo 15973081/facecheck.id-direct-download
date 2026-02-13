@@ -8,6 +8,8 @@
 // @match        https://*.facecheck.id/*
 // @grant        none
 // @run-at       document-end
+// @downloadURL  https://raw.githubusercontent.com/15973081/facecheck.id-direct-download/main/facecheck.user.js
+// @updateURL    https://raw.githubusercontent.com/15973081/facecheck.id-direct-download/main/facecheck.user.js
 // ==/UserScript==
 
 (function() {
