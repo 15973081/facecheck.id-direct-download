@@ -77,7 +77,7 @@
         // 下載按鈕
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'fc-download-btn';
-        downloadBtn.textContent = '下載';
+        downloadBtn.textContent = 'download';
         downloadBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -92,7 +92,7 @@
         // Yandex 按鈕（只跳轉，不做其他事）
         const yandexBtn = document.createElement('button');
         yandexBtn.className = 'fc-yandex-btn';
-        yandexBtn.textContent = 'Yandex 搜圖';
+        yandexBtn.textContent = 'Yandex search';
         yandexBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -132,5 +132,5 @@
     // 保險機制：頁面延遲載入很常見
     setInterval(scanForBgImages, 5000);
 
-    console.log('[FaceCheck Tools] v0.8 已載入 - 下載 + 直接跳轉 Yandex');
+    //console.log('[FaceCheck Tools] v0.3 ');
 })();
