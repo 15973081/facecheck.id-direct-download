@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FaceCheck.id - Download Base64 Images Directly
 // @namespace    https://github.com/15973081
-// @version      0.2
+// @version      0.3
 // @description  让 FaceCheck.id 的 base64 预览图可直接点击下载，不跳转、不重定向
 // @author       mayunnan
 // @match        https://facecheck.id/*
@@ -16,7 +16,7 @@
     const PREFIX = 'facecheck-';
     const EXT = 'webp';
 
-    // 创建按钮样式（两个按钮：下载 + Yandex搜索）
+    // 插入樣式
     const style = document.createElement('style');
     style.textContent = `
         .fc-btn-container {
@@ -24,19 +24,20 @@
             bottom: 8px;
             right: 8px;
             display: flex;
-            gap: 6px;
+            gap: 8px;
             z-index: 9999;
             display: none;
         }
         .fc-download-btn, .fc-yandex-btn {
-            background: rgba(0, 120, 215, 0.9);
+            background: rgba(0, 120, 215, 0.92);
             color: white;
             border: none;
-            border-radius: 4px;
-            padding: 6px 10px;
-            font-size: 12px;
+            border-radius: 5px;
+            padding: 6px 12px;
+            font-size: 13px;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+            transition: background 0.15s;
         }
         .fc-download-btn:hover, .fc-yandex-btn:hover {
             background: rgba(0, 120, 215, 1);
@@ -54,18 +55,14 @@
     function extractDataUrlFromBg(el) {
         const bg = window.getComputedStyle(el).backgroundImage;
         if (!bg || bg === 'none') return null;
-
-        // 匹配 url("data:...") 或 url(data:...)
         const match = bg.match(/url\(["']?(data:image\/[^"')]+)["']?\)/i);
         return match ? match[1] : null;
     }
 
     function addButtons(el, dataUrl) {
-        // 避免重复添加
         if (el.dataset.fcHasBtn === '1') return;
         el.dataset.fcHasBtn = '1';
 
-        // 包一层相对定位容器
         let container = el;
         if (el.parentNode && !el.parentNode.classList.contains('fc-download-container')) {
             container = document.createElement('div');
@@ -74,20 +71,16 @@
             container.appendChild(el);
         }
 
-        // 按钮容器
         const btnContainer = document.createElement('div');
         btnContainer.className = 'fc-btn-container';
 
-        // 下载按钮
+        // 下載按鈕
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'fc-download-btn';
-        downloadBtn.textContent = '下载';
-        downloadBtn.title = '点击下载此 base64 图片';
-
+        downloadBtn.textContent = '下載';
         downloadBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
-
             const a = document.createElement('a');
             a.href = dataUrl;
             a.download = `${PREFIX}${Date.now()}.${EXT}`;
@@ -96,19 +89,17 @@
             document.body.removeChild(a);
         };
 
-        // Yandex 搜索按钮
+        // Yandex 按鈕（只跳轉，不做其他事）
         const yandexBtn = document.createElement('button');
         yandexBtn.className = 'fc-yandex-btn';
-        yandexBtn.textContent = 'Yandex搜索';
-        yandexBtn.title = '点击用此图片在 Yandex 进行反向搜索';
-
+        yandexBtn.textContent = 'Yandex 搜圖';
         yandexBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
-
-            // 构造 Yandex 反向图片搜索 URL，使用 encodeURIComponent 处理 dataUrl
-            const yandexUrl = `https://yandex.com/images/search?rpt=imageview&url=${encodeURIComponent(dataUrl)}`;
-            window.open(yandexUrl, '_blank');
+            window.open('https://yandex.com/images/', '_blank');
+            // 可選：如果你希望更明顯地提醒使用者自己手動上傳，可以加這一行
+            // 但多數人已經知道，所以這裡先註解掉
+            // alert('已開啟 Yandex 搜圖頁面，請手動上傳或貼上圖片');
         };
 
         btnContainer.appendChild(downloadBtn);
@@ -117,12 +108,13 @@
     }
 
     function scanForBgImages() {
-        // 扫描结果容器（根据 ID 如 #fimg0 或类名调整）
-        const candidates = document.querySelectorAll(
-            'div, li, span, a, [class*="result"], [class*="card"], [class*="item"], [id^="fimg"]'
-        );
+        const selectors = [
+            'div', 'li', 'span', 'a',
+            '[class*="result"]', '[class*="card"]', '[class*="item"]',
+            '[id^="fimg"]', '[class*="image"]', '[class*="photo"]'
+        ].join(',');
 
-        candidates.forEach(el => {
+        document.querySelectorAll(selectors).forEach(el => {
             const dataUrl = extractDataUrlFromBg(el);
             if (dataUrl && dataUrl.startsWith('data:image/')) {
                 addButtons(el, dataUrl);
@@ -130,18 +122,15 @@
         });
     }
 
-    // 初次扫描
+    // 初次執行
     scanForBgImages();
 
-    // 监听动态变化
-    const observer = new MutationObserver(() => {
-        scanForBgImages();
-    });
-
+    // 監聽 DOM 變化
+    const observer = new MutationObserver(scanForBgImages);
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 定时扫描
-    setInterval(scanForBgImages, 8000);
+    // 保險機制：頁面延遲載入很常見
+    setInterval(scanForBgImages, 5000);
 
-    console.log('[FC Download & Yandex] 脚本加载完成，悬停结果图出现“下载”和“Yandex搜索”按钮');
+    console.log('[FaceCheck Tools] v0.8 已載入 - 下載 + 直接跳轉 Yandex');
 })();
